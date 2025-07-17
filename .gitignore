@@ -1,0 +1,30 @@
+# Byte-code files
+*.pyc
+__pycache__/
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+
+# Editors
+*.swp
+*~
+.vscode/
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# uv specific
+.uv/
+
+# Temporary files
+temp_recording.wav
+
+# Environment variables
+.env
+
+.venv

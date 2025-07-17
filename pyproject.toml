@@ -1,0 +1,22 @@
+[project]
+name = "transcribe-cli"
+version = "0.1.0"
+description = "A CLI application for real-time audio transcription using Mistral Voxstral API."
+authors = [
+    { name = "Gatien Chenu", email = "gatien+dev@chenu.me" },
+]
+dependencies = [
+    "requests",
+    "python-dotenv",
+    "pyperclip",
+]
+requires-python = ">=3.8"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.scripts]
+transcribe = "transcribe_cli.transcriber:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
