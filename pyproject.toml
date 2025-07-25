@@ -15,7 +15,7 @@ readme = "README.md"
 license = { text = "MIT" }
 
 [project.scripts]
-transcribe = "transcribe_cli.transcriber:main"
+transcribe = "transcribe_cli.cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
