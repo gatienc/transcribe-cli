@@ -1,20 +1,19 @@
 import logging
-import os # Added os import
-import subprocess
-import sys
-import termios
-import tty
+import os
+import queue
 import wave
 from pathlib import Path
 from typing import Optional, Tuple
 
 import requests
+import sounddevice as sd
+import soundfile as sf
+from pynput import keyboard
 
 from .constants import (
     CHANNELS,
     DEFAULT_CHAT_MODEL,
     DEFAULT_TRANSCRIPTION_MODEL,
-    FORMAT,
     LARGE_CHAT_MODEL,
     LARGE_TRANSCRIPTION_MODEL,
     MISTRAL_CHAT_API_URL,
@@ -58,103 +57,61 @@ class Transcriber:
         self.logger.info(f"Using chat model: {self.chat_model}")
 
     def record_audio(self) -> Tuple[bool, float]:
-        """
-        Records audio using ALSA `arecord` until Enter or Escape is pressed.
-
-        This method starts `arecord` as a background process to capture audio.
-        It sets the terminal to cbreak mode to read single key presses.
-        If Enter is pressed, the recording stops and the file is kept.
-        If Escape is pressed, the recording stops and the file is deleted.
-
-        Returns
-        -------
-        Tuple[bool, float]
-            A tuple containing:
-            - bool: True if recording was successful (Enter pressed), False if cancelled (Escape pressed).
-            - float: The duration of the recorded audio in seconds, or 0.0 if cancelled or failed.
-
-        Raises
-        -------
-        FileNotFoundError
-            If the `arecord` command is not found.
-        Exception
-            If any other error occurs during recording.
-        """
         output_path = Path(WAVE_OUTPUT_FILENAME)
-        command = [
-            "arecord",
-            "-D",
-            "default",
-            "-q",
-            "-r",
-            str(SAMPLE_RATE),
-            "-c",
-            str(CHANNELS),
-            "-f",
-            FORMAT,
-            "-t",
-            "wav",
-            str(output_path),
-        ]
+        if output_path.exists():
+            output_path.unlink()
+        q: queue.Queue[any] = queue.Queue()
+        recording = True
+        cancelled = False
 
-        old_settings = termios.tcgetattr(sys.stdin)
-        recording_successful = False
-        recorder_process = None
-        duration_seconds = 0.0
+        def on_press(key):
+            nonlocal recording
+            nonlocal cancelled
+            if key == keyboard.Key.enter:
+                recording = False
+                return False
+            if key == keyboard.Key.esc:
+                recording = False
+                cancelled = True
+                return False
+
+        def callback(indata, frames, time, status):
+            if status:
+                self.logger.warning(status)
+            q.put(indata.copy())
 
         try:
-            # Set terminal to cbreak mode so we can read single key presses
-            tty.setcbreak(sys.stdin.fileno())
-            # Start the recording process in the background
-            recorder_process = subprocess.Popen(command)
+            with sf.SoundFile(
+                str(output_path),
+                mode="x",
+                samplerate=SAMPLE_RATE,
+                channels=CHANNELS,
+            ) as file:
+                with sd.InputStream(
+                    samplerate=SAMPLE_RATE, channels=CHANNELS, callback=callback
+                ) as stream:
+                    print("Recording... Press Enter to stop or Esc to cancel.")
+                    with keyboard.Listener(on_press=on_press) as listener:
+                        while recording:
+                            file.write(q.get())
+                        listener.join()
 
-            self.logger.info(
-                "Recording... Press Enter to stop, Escape to cancel.")
+            if cancelled:
+                if output_path.exists():
+                    output_path.unlink()
+                return False, 0.0
 
-            while True:
-                char = sys.stdin.read(1)
-                if char == '\n':  # Enter key
-                    recording_successful = True
-                    break
-                elif char == '\x1b':  # Escape key
-                    recording_successful = False
-                    break
+            if output_path.exists():
+                with wave.open(str(output_path), "rb") as wf:
+                    frames = wf.getnframes()
+                    rate = wf.getframerate()
+                    duration = frames / float(rate)
+                return True, duration
 
-        except FileNotFoundError:
-            self.logger.error("Error: `arecord` command not found.")
-            self.logger.error(
-                "Please ensure ALSA tools are installed (`sudo apt-get install alsa-utils`)."
-            )
-            raise
         except Exception as e:
             self.logger.error(f"An error occurred during recording: {e}")
-            raise
-        finally:
-            # Always restore terminal settings
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 
-            if recorder_process and recorder_process.poll() is None:
-                recorder_process.terminate()
-                recorder_process.wait()
-
-            self.logger.info("Recording stopped.")
-
-            if not recording_successful and output_path.exists():
-                output_path.unlink()
-                self.logger.info("Recording cancelled and file deleted.")
-            elif recording_successful and output_path.exists():
-                try:
-                    with wave.open(str(output_path), 'rb') as wf:
-                        frames = wf.getnframes()
-                        rate = wf.getframerate()
-                        if rate > 0:
-                            duration_seconds = frames / float(rate)
-                except wave.Error as e:
-                    self.logger.error(
-                        f"Error reading WAV file for duration: {e}")
-                    duration_seconds = 0.0
-
-        return recording_successful, duration_seconds
+        return False, 0.0
 
     def transcribe_audio(self) -> str:
         """

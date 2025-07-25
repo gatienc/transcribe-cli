@@ -9,6 +9,10 @@ dependencies = [
     "requests",
     "python-dotenv",
     "pyperclip",
+    "sounddevice",
+    "soundfile",
+    "numpy",
+    "pynput",
 ]
 requires-python = ">=3.8"
 readme = "README.md"

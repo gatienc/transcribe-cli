@@ -3,7 +3,6 @@ from pathlib import Path
 # Audio settings
 SAMPLE_RATE: int = 16000  # 16kHz
 CHANNELS: int = 1  # Mono
-FORMAT: str = "S16_LE"  # 16-bit little-endian, standard for WAV
 WAVE_OUTPUT_FILENAME: str = "temp_recording.wav"
 
 # Mistral API settings

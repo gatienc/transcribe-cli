@@ -4,6 +4,7 @@ import subprocess
 import sys
 from typing import Optional
 
+import requests
 from dotenv import load_dotenv # Added import
 
 from .transcriber import Transcriber
