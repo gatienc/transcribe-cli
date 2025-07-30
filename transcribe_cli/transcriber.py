@@ -5,10 +5,11 @@ import wave
 from pathlib import Path
 from typing import Optional, Tuple
 
-import requests
+import requests  # type: ignore[import-untyped]
 import sounddevice as sd
 import soundfile as sf
 from pynput import keyboard
+from typing import Any
 
 from .constants import (
     CHANNELS,
@@ -49,18 +50,15 @@ class Transcriber:
             if use_large_model
             else DEFAULT_TRANSCRIPTION_MODEL
         )
-        self.chat_model = (
-            LARGE_CHAT_MODEL if use_large_model else DEFAULT_CHAT_MODEL
-        )
-        self.logger.info(
-            f"Using transcription model: {self.transcription_model}")
+        self.chat_model = LARGE_CHAT_MODEL if use_large_model else DEFAULT_CHAT_MODEL
+        self.logger.info(f"Using transcription model: {self.transcription_model}")
         self.logger.info(f"Using chat model: {self.chat_model}")
 
     def record_audio(self) -> Tuple[bool, float]:
         output_path = Path(WAVE_OUTPUT_FILENAME)
         if output_path.exists():
             output_path.unlink()
-        q: queue.Queue[any] = queue.Queue()
+        q: queue.Queue[Any] = queue.Queue()
         recording = True
         cancelled = False
 
@@ -89,7 +87,7 @@ class Transcriber:
             ) as file:
                 with sd.InputStream(
                     samplerate=SAMPLE_RATE, channels=CHANNELS, callback=callback
-                ) as stream:
+                ):
                     print("Recording... Press Enter to stop or Esc to cancel.")
                     with keyboard.Listener(on_press=on_press) as listener:
                         while recording:
@@ -113,6 +111,12 @@ class Transcriber:
 
         return False, 0.0
 
+    def cleanup(self) -> None:
+        audio_path = Path(WAVE_OUTPUT_FILENAME)
+        if audio_path.exists():
+            audio_path.unlink()
+            self.logger.info(f"Cleaned up temporary file: {audio_path}")
+
     def transcribe_audio(self) -> str:
         """
         Transcribes an audio file using the Mistral Voxstral API.
@@ -134,8 +138,7 @@ class Transcriber:
         audio_path = Path(WAVE_OUTPUT_FILENAME)
 
         if not audio_path.exists():
-            raise FileNotFoundError(
-                "Audio file not found. Recording may have failed.")
+            raise FileNotFoundError("Audio file not found. Recording may have failed.")
 
         try:
             with open(audio_path, "rb") as f:
@@ -143,8 +146,7 @@ class Transcriber:
                     "file": (audio_path.name, f, "audio/wav"),
                     "model": (None, self.transcription_model),
                 }
-                self.logger.info(
-                    "Sending audio to Mistral API for transcription...")
+                self.logger.info("Sending audio to Mistral API for transcription...")
                 response = requests.post(
                     MISTRAL_TRANSCRIPTION_API_URL, headers=headers, files=files
                 )
@@ -184,7 +186,7 @@ class Transcriber:
             If the API call fails.
         """
         headers = {
-            "Authorization": f"Bearer {MISTRAL_API_KEY}",
+            "Authorization": f"Bearer {self.mistral_api_key}",
             "Content-Type": "application/json",
         }
         messages = [
@@ -204,8 +206,7 @@ class Transcriber:
                 MISTRAL_CHAT_API_URL, headers=headers, json=payload
             )
             response.raise_for_status()
-            translated_text = response.json(
-            )["choices"][0]["message"]["content"]
+            translated_text = response.json()["choices"][0]["message"]["content"]
             self.logger.info("Translation received.")
             return translated_text
         except requests.exceptions.RequestException as e:
@@ -236,12 +237,11 @@ class Transcriber:
             If the API call fails.
         """
         headers = {
-            "Authorization": f"Bearer {MISTRAL_API_KEY}",
+            "Authorization": f"Bearer {self.mistral_api_key}",
             "Content-Type": "application/json",
         }
 
-        self.logger.info(
-            f"Changing tone with custom prompt: '{custom_tone_prompt}'...")
+        self.logger.info(f"Changing tone with custom prompt: '{custom_tone_prompt}'...")
         full_prompt = f"{custom_tone_prompt}\n\n{text}"
 
         messages = [
@@ -260,8 +260,7 @@ class Transcriber:
                 MISTRAL_CHAT_API_URL, headers=headers, json=payload
             )
             response.raise_for_status()
-            rephrased_text = response.json(
-            )["choices"][0]["message"]["content"]
+            rephrased_text = response.json()["choices"][0]["message"]["content"]
             self.logger.info("Tone change received.")
             return rephrased_text
         except requests.exceptions.RequestException as e:

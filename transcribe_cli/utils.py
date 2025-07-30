@@ -1,7 +1,10 @@
 import logging
 import pyperclip
 
-def _output_transcription(transcription: str, to_clipboard: bool, logger: logging.Logger) -> None:
+
+def _output_transcription(
+    transcription: str, to_clipboard: bool, logger: logging.Logger
+) -> None:
     """
     Helper function to print and optionally copy transcription to clipboard.
     """
@@ -14,4 +17,3 @@ def _output_transcription(transcription: str, to_clipboard: bool, logger: loggin
             logger.info("Transcription copied to clipboard.")
         except pyperclip.PyperclipException as e:
             logger.error(f"Failed to copy to clipboard: {e}")
-
